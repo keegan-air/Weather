@@ -1,0 +1,32 @@
+name: Update weather data
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: weather-update
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Fetch from Ecowitt
+        env:
+          ECOWITT_APP_KEY: ${{ secrets.ECOWITT_APP_KEY }}
+          ECOWITT_API_KEY: ${{ secrets.ECOWITT_API_KEY }}
+          ECOWITT_MAC: ${{ secrets.ECOWITT_MAC }}
+          STATION_NAME: ${{ vars.STATION_NAME }}
+        run: node update.mjs
+      - name: Commit if changed
+        run: |
+          git config user.name  "weather-bot"
+          git config user.email "weather-bot@users.noreply.github.com"
+          git add data.json
+          git diff --staged --quiet || git commit -m "data: $(date -u +%FT%TZ) [skip ci]"
+          git push
