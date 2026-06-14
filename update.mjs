@@ -30,11 +30,11 @@ const current = json.data || {};
 let history = [];
 try { history = JSON.parse(await readFile("data.json", "utf8")).history || []; } catch {}
 const tempVal = parseFloat(current?.outdoor?.temperature?.value);
-const rateVal = parseFloat(current?.rainfall?.rain_rate?.value);
+const dailyVal = parseFloat(current?.rainfall?.daily?.value);   // cumulative mm since midnight
 if (!isNaN(tempVal)) history.push({
   t: Math.floor(Date.now() / 1000),
   temp: +tempVal.toFixed(1),
-  rain: isNaN(rateVal) ? 0 : +rateVal.toFixed(2),
+  rd: isNaN(dailyVal) ? 0 : +dailyVal.toFixed(2),
 });
 const cutoff = Math.floor(Date.now() / 1000) - 24 * 3600;
 history = history.filter(p => p.t >= cutoff).slice(-288); // ~24h, defensive cap
