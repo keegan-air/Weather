@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<meta name="theme-color" content="#10202E"/>
+<title>Weather — live from the station</title>
+<link rel="preload" as="image" href="bg.webp"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://api.open-meteo.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--fg:#fff;--fg-dim:rgba(255,255,255,.72);--ease:cubic-bezier(.2,.7,.2,1);
+ --scrim-top:rgba(8,14,22,.42);--scrim-bot:rgba(8,14,22,.62)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:"Inter",system-ui,sans-serif;color:var(--fg);min-height:100dvh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;background:#1b2733 url("bg.webp") center/cover no-repeat}
+#scrim{position:fixed;inset:0;z-index:-1;background:linear-gradient(180deg,var(--scrim-top) 0%,rgba(8,14,22,.18) 32%,rgba(8,14,22,.30) 64%,var(--scrim-bot) 100%);transition:background 1s var(--ease)}
+.wrap{max-width:720px;margin:0 auto;padding:clamp(18px,5vw,34px) clamp(16px,5vw,30px) 52px;min-height:100dvh;display:flex;flex-direction:column}
+.eyebrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:"Space Mono",monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-dim);text-shadow:0 1px 8px rgba(0,0,0,.35)}
+.dot{width:7px;height:7px;border-radius:50%;background:#3ddc84;animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,220,132,.5)}70%{box-shadow:0 0 0 9px rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
+
+/* HERO */
+.hero{display:flex;align-items:center;gap:clamp(6px,2vw,18px);margin:14px 0 24px;opacity:0;transform:translateY(12px);animation:rise .7s var(--ease) .05s forwards}
+.mascot{flex:0 0 auto;width:clamp(150px,44vw,210px);height:clamp(150px,44vw,210px);perspective:780px;display:grid;place-items:center}
+.mascot svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 12px 18px rgba(0,0,0,.28));animation:turn 6.5s ease-in-out infinite}
+@keyframes turn{0%,100%{transform:rotateY(-12deg)}50%{transform:rotateY(12deg)}}
+.heat{display:flex;flex-direction:column;min-width:0}
+.temp{font-family:"Bricolage Grotesque";font-weight:800;line-height:.84;font-size:clamp(76px,22vw,132px);letter-spacing:-.04em;display:flex;align-items:flex-start;text-shadow:0 2px 18px rgba(0,0,0,.4)}
+.temp .deg{font-size:.3em;font-weight:600;margin-top:.55em}
+.condition{font-family:"Bricolage Grotesque";font-weight:600;font-size:clamp(18px,4.8vw,24px);letter-spacing:-.01em;text-shadow:0 1px 10px rgba(0,0,0,.4)}
+.feels{font-family:"Space Mono",monospace;font-size:12.5px;line-height:1.55;color:var(--fg-dim);margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,.4)}
+
+/* CARDS */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(min-width:560px){.grid{grid-template-columns:repeat(3,1fr)}}
+.card{background:rgba(14,22,34,.34);border:1px solid rgba(255,255,255,.22);border-radius:17px;padding:15px 16px 16px;backdrop-filter:blur(13px) saturate(1.1);-webkit-backdrop-filter:blur(13px) saturate(1.1);opacity:0;transform:translateY(12px);animation:rise .6s var(--ease) forwards}
+.card .k{font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-dim)}
+.card .v{font-family:"Bricolage Grotesque";font-weight:600;font-size:clamp(25px,6.5vw,32px);letter-spacing:-.02em;margin-top:7px;line-height:1}
+.card .v small{font-size:.46em;font-weight:600;color:var(--fg-dim);margin-left:3px}
+.card .sub{font-family:"Space Mono",monospace;font-size:11px;color:var(--fg-dim);margin-top:6px;min-height:13px}
+.compass{display:inline-flex;align-items:center;gap:8px}.compass svg{transition:transform 1s var(--ease)}
+.uvpill{display:inline-block;padding:2px 9px;border-radius:999px;font-family:"Space Mono",monospace;font-size:10.5px;font-weight:700;color:#10202E}
+
+/* FORECAST — stacked full-width pills */
+.fc{margin-top:20px;opacity:0;transform:translateY(12px);animation:rise .6s var(--ease) .45s forwards}
+.fc-h{font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-dim);margin:0 2px 10px;display:flex;justify-content:space-between}
+.fc-list{display:flex;flex-direction:column;gap:8px}
+.fc-pill{display:flex;align-items:center;gap:12px;padding:9px 15px;background:rgba(14,22,34,.34);border:1px solid rgba(255,255,255,.2);border-radius:14px;backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px)}
+.fc-pill .d{flex:0 0 46px;font-family:"Space Mono",monospace;font-size:12px;color:var(--fg-dim);letter-spacing:.03em}
+.fc-pill .ic{flex:0 0 26px;height:26px}
+.fc-pill .lab{flex:1 1 auto;font-size:13px;color:var(--fg-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-pill .pp{flex:0 0 40px;text-align:right;font-family:"Space Mono",monospace;font-size:11px;color:#9cd2f0}
+.fc-pill .hl{flex:0 0 78px;text-align:right;font-family:"Bricolage Grotesque";font-weight:700;font-size:16px}
+.fc-pill .hl .lo{color:var(--fg-dim);font-weight:600}
+
+/* CHARTS */
+.trend{margin-top:14px;background:rgba(14,22,34,.34);border:1px solid rgba(255,255,255,.22);border-radius:17px;padding:15px 16px 11px;backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);opacity:0;transform:translateY(12px);animation:rise .6s var(--ease) .55s forwards}
+.trend.r{animation-delay:.62s}
+.trend .k{font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-dim);display:flex;justify-content:space-between}
+.trend svg{width:100%;height:58px;display:block;margin-top:9px}
+footer{margin-top:auto;padding-top:24px;font-family:"Space Mono",monospace;font-size:11px;color:var(--fg-dim);line-height:1.7;text-shadow:0 1px 8px rgba(0,0,0,.4)}
+@keyframes rise{to{opacity:1;transform:none}}
+
+/* ===== MASCOT MOTION (scoped per root class) ===== */
+/* Sun */
+.m-sun .rays{transform-origin:60px 58px;animation:spin 16s linear infinite}
+.m-sun .orb{transform-origin:60px 60px;animation:bob 1.7s ease-in-out infinite}
+.m-sun .wingL{transform-origin:38px 62px;animation:flapL .5s ease-in-out infinite}
+.m-sun .wingR{transform-origin:82px 62px;animation:flapR .5s ease-in-out infinite}
+.m-sun .shadow{transform-origin:center;animation:shp 1.7s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-5px) rotate(4deg)}}
+@keyframes flapL{0%,100%{transform:rotate(6deg) scaleX(1)}50%{transform:rotate(-26deg) scaleX(.78)}}
+@keyframes flapR{0%,100%{transform:rotate(-6deg) scaleX(1)}50%{transform:rotate(26deg) scaleX(.78)}}
+@keyframes shp{0%,100%{transform:scaleX(1);opacity:.3}50%{transform:scaleX(.82);opacity:.22}}
+/* Rain — grumpy stamper */
+.m-rain .puff{transform-origin:60px 52px;animation:rshake .62s ease-in-out infinite}
+.m-rain .footL{transform-origin:50px 84px;animation:stompL .62s ease-in-out infinite}
+.m-rain .footR{transform-origin:70px 84px;animation:stompR .62s ease-in-out infinite}
+.m-rain .shadow{transform-origin:center;animation:shr .62s ease-in-out infinite}
+.m-rain .drop{animation:fall 1.1s linear infinite}
+.m-rain .drop2{animation:fall 1.1s linear infinite .55s}
+.m-rain .drop3{animation:fall 1.1s linear infinite .3s}
+@keyframes rshake{0%,100%{transform:translate(0,0) rotate(-1.6deg)}50%{transform:translate(1px,1px) rotate(1.6deg)}}
+@keyframes stompL{0%,49%{transform:translateY(0) scaleY(1)}24%{transform:translateY(-7px) scaleY(1.08)}50%,100%{transform:translateY(0) scaleY(.9)}}
+@keyframes stompR{0%,50%{transform:translateY(0) scaleY(.9)}74%{transform:translateY(-7px) scaleY(1.08)}100%{transform:translateY(0) scaleY(1)}}
+@keyframes shr{0%,100%{transform:scaleX(1);opacity:.3}50%{transform:scaleX(.9);opacity:.24}}
+@keyframes fall{0%{transform:translateY(0) scaleY(.7);opacity:0}25%{opacity:1}100%{transform:translateY(22px) scaleY(1.2);opacity:0}}
+/* Cloud — sleepy */
+.m-cloud .puff{transform-origin:60px 56px;animation:floaty 4.2s ease-in-out infinite}
+.m-cloud .zz{animation:zzz 3s ease-in-out infinite;opacity:0}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes zzz{0%{transform:translate(0,0) scale(.6);opacity:0}30%{opacity:.9}100%{transform:translate(9px,-18px) scale(1);opacity:0}}
+/* Moon — snoozing */
+.m-moon .orb{transform-origin:60px 60px;animation:nod 4.6s ease-in-out infinite}
+.m-moon .zz{animation:zzz 3s ease-in-out infinite;opacity:0}
+.m-moon .twk{transform-origin:center;animation:twinkle 2.3s ease-in-out infinite}
+@keyframes nod{0%,100%{transform:rotate(-5deg) translateY(0)}50%{transform:rotate(5deg) translateY(-4px)}}
+@keyframes twinkle{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}
+/* Windy — cheeky blower */
+.m-windy .puff{transform-origin:58px 54px;animation:wlean 2.2s ease-in-out infinite}
+.m-windy .gust{animation:gust 1.5s ease-in infinite}
+.m-windy .gust2{animation:gust 1.5s ease-in infinite .5s}
+.m-windy .gust3{animation:gust 1.5s ease-in infinite .95s}
+.m-windy .shadow{transform-origin:center;animation:shp 2.2s ease-in-out infinite}
+@keyframes wlean{0%,100%{transform:rotate(-3deg) translateX(-2px)}50%{transform:rotate(3deg) translateX(2px)}}
+@keyframes gust{0%{transform:translateX(-12px) scaleX(.6);opacity:0}30%{opacity:.95}100%{transform:translateX(30px) scaleX(1.3);opacity:0}}
+/* Thunder — zappy storm */
+.m-thunder .puff{transform-origin:60px 50px;animation:rshake .6s ease-in-out infinite}
+.m-thunder .bolt{transform-origin:60px 74px;animation:flash 2.4s steps(1,end) infinite}
+.m-thunder .shadow{transform-origin:center;animation:shr .6s ease-in-out infinite}
+@keyframes flash{0%,84%{opacity:.18}86%{opacity:1}89%{opacity:.25}92%{opacity:1}97%,100%{opacity:.18}}
+/* Partly — sun behind cloud */
+.m-partly .sun{transform-origin:46px 46px;animation:spin 18s linear infinite}
+.m-partly .puff{transform-origin:64px 62px;animation:floaty 4.6s ease-in-out infinite}
+.m-partly .shadow{transform-origin:center;animation:shp 4.6s ease-in-out infinite}
+
+@media (prefers-reduced-motion:reduce){
+ *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition:none!important}
+ .hero,.card,.trend,.fc{opacity:1;transform:none}
+ .mascot svg{animation:none}
+ .m-rain .drop,.m-rain .drop2,.m-rain .drop3,.m-cloud .zz,.m-moon .zz,.m-windy .gust,.m-windy .gust2,.m-windy .gust3,.m-thunder .bolt{opacity:1}
+}
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="scrim"></div>
+<div class="wrap">
+  <div class="eyebrow"><span class="dot"></span><span id="place">Loading…</span><span style="opacity:.5">·</span><span id="updated">—</span></div>
+  <div class="hero">
+    <div class="mascot" id="mascot"></div>
+    <div class="heat">
+      <div class="temp"><span id="temp">--</span><span class="deg" id="tempunit">°</span></div>
+      <div class="condition" id="condition">—</div>
+      <div class="feels" id="feels"></div>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="fc" id="fcbox" style="display:none">
+    <div class="fc-h"><span id="fctitle">Forecast</span></div>
+    <div class="fc-list" id="fcrow"></div>
+  </div>
+  <div class="trend" id="trendbox" style="display:none">
+    <div class="k"><span>Temperature · last 24h</span><span id="trendrange"></span></div>
+    <svg id="spark" viewBox="0 0 600 58" preserveAspectRatio="none" aria-hidden="true"></svg>
+  </div>
+  <div class="trend r" id="rainbox" style="display:none">
+    <div class="k"><span>Rain · last 24h</span><span id="rainrange"></span></div>
+    <svg id="sparkrain" viewBox="0 0 600 58" preserveAspectRatio="none" aria-hidden="true"></svg>
+  </div>
+  <footer id="foot"></footer>
+</div>
+<script>
+/* ============ CONFIG ============ */
+const FC_LAT=-33.98, FC_LON=115.77, FC_NAME="Nannup", FC_MODEL=""; // FC_MODEL="bom_access_global" to force BOM only
+
+/* ============ SAMPLE (preview / first run) ============ */
+const SAMPLE={updated:new Date(Date.now()-3*60000).toISOString(),station:"Backyard Station",current:{
+ outdoor:{temperature:{unit:"℃",value:"16.4"},feels_like:{unit:"℃",value:"15.1"},dew_point:{unit:"℃",value:"11.2"},humidity:{unit:"%",value:"71"}},
+ wind:{wind_speed:{unit:"km/h",value:"12"},wind_gust:{unit:"km/h",value:"21"},wind_direction:{unit:"º",value:"212"}},
+ rainfall:{rain_rate:{unit:"mm/hr",value:"0.0"},daily:{unit:"mm",value:"2.2"}},
+ pressure:{relative:{unit:"hPa",value:"1018"}},solar_and_uvi:{solar:{unit:"W/m²",value:"520"},uvi:{unit:"",value:"4"}}},
+ history:Array.from({length:48},(_,i)=>({t:Math.floor(Date.now()/1000)-(47-i)*1800,
+   temp:13+4*Math.sin(i/8)+(i>30?(i-30)*.12:0),
+   rain:(i>=22&&i<=30)?+(Math.max(0,Math.sin((i-22)/8*Math.PI))*2.4).toFixed(1):0}))};
+const SAMPLE_FC={time:["2026-06-14","2026-06-15","2026-06-16","2026-06-17","2026-06-18","2026-06-19"],
+ weather_code:[1,3,61,80,2,0],temperature_2m_max:[18,17,15,16,19,21],temperature_2m_min:[8,9,11,10,7,6],precipitation_probability_max:[10,40,80,70,20,5]};
+
+const $=id=>document.getElementById(id);
+const num=v=>{const n=parseFloat(v);return isNaN(n)?null:n};
+const dirName=d=>["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round((d%360)/22.5)%16];
+function ago(iso){const s=Math.max(0,(Date.now()-new Date(iso))/1000);if(s<90)return"updated just now";const m=Math.round(s/60);if(m<60)return"updated "+m+" min ago";return"updated "+Math.round(m/60)+" h ago"}
+function uv(i){i=num(i)??0;if(i<3)return["Low","#7ac74f"];if(i<6)return["Moderate","#f6c544"];if(i<8)return["High","#f6a623"];if(i<11)return["Very high","#ef6c4d"];return["Extreme","#b65cc9"]}
+
+/* ============ MASCOTS — each fully wrapped in its root class ============ */
+const DEFS=`<defs>
+ <radialGradient id="sun" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#fff0b8"/><stop offset=".5" stop-color="#ffd23f"/><stop offset="1" stop-color="#f59e0b"/></radialGradient>
+ <linearGradient id="ray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe27a"/><stop offset="1" stop-color="#ffb300"/></linearGradient>
+ <linearGradient id="cl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#aeb9c6"/><stop offset="1" stop-color="#7e8b9b"/></linearGradient>
+ <linearGradient id="clb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8d99a8"/><stop offset="1" stop-color="#646f7e"/></linearGradient>
+ <linearGradient id="cc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef3f8"/><stop offset="1" stop-color="#cdd8e2"/></linearGradient>
+ <linearGradient id="ccb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c7d2dd"/><stop offset="1" stop-color="#a9b6c4"/></linearGradient>
+ <linearGradient id="dk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b7787"/><stop offset="1" stop-color="#454f5d"/></linearGradient>
+ <radialGradient id="mn" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#fff1c0"/><stop offset="1" stop-color="#f5c43f"/></radialGradient></defs>`;
+const face=(eyeY)=>`<circle cx="51" cy="${eyeY}" r="3" fill="#3c4a59"/><circle cx="69" cy="${eyeY}" r="3" fill="#3c4a59"/>`;
+const cloudBody=(g,gb)=>`<ellipse cx="44" cy="52" rx="20" ry="18" fill="url(#${gb})"/><ellipse cx="80" cy="54" rx="18" ry="16" fill="url(#${gb})"/><ellipse cx="60" cy="46" rx="26" ry="22" fill="url(#${g})"/><ellipse cx="40" cy="58" rx="16" ry="13" fill="url(#${g})"/><ellipse cx="82" cy="60" rx="15" ry="12" fill="url(#${g})"/>`;
+
+const SUN=`<svg viewBox="0 0 120 120">${DEFS}<g class="m-sun">
+ <ellipse class="shadow" cx="60" cy="108" rx="30" ry="6" fill="#000" opacity=".3"/>
+ <g class="rays" fill="url(#ray)">${Array.from({length:12},(_,i)=>`<rect x="57.5" y="6" width="5" height="16" rx="2.5" transform="rotate(${i*30} 60 58)"/>`).join("")}</g>
+ <g class="orb">
+  <path class="wingL" d="M38 60 q-20 -8 -25 7 q15 6 25 1Z" fill="#fff" opacity=".95"/>
+  <path class="wingR" d="M82 60 q20 -8 25 7 q-15 6 -25 1Z" fill="#fff" opacity=".95"/>
+  <circle cx="60" cy="60" r="30" fill="url(#sun)"/><ellipse cx="50" cy="50" rx="11" ry="8" fill="#fff" opacity=".28"/>
+  <circle cx="50" cy="58" r="3.6" fill="#7a4e00"/><circle cx="70" cy="58" r="3.6" fill="#7a4e00"/>
+  <circle cx="46" cy="66" r="4.4" fill="#ff9d8a" opacity=".75"/><circle cx="74" cy="66" r="4.4" fill="#ff9d8a" opacity=".75"/>
+  <path d="M52 67 q8 8 16 0" stroke="#7a4e00" stroke-width="3" fill="none" stroke-linecap="round"/>
+ </g></g></svg>`;
+const RAIN=`<svg viewBox="0 0 120 120">${DEFS}<g class="m-rain">
+ <ellipse class="shadow" cx="60" cy="110" rx="30" ry="6" fill="#000" opacity=".3"/>
+ <rect class="footL" x="46" y="80" width="8" height="14" rx="4" fill="#8a97a5"/><rect class="footR" x="66" y="80" width="8" height="14" rx="4" fill="#8a97a5"/>
+ <g class="puff">${cloudBody("cl","clb")}
+  <path d="M46 44 l11 4" stroke="#3c4a59" stroke-width="3" stroke-linecap="round"/><path d="M74 48 l-11 4" stroke="#3c4a59" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="51" cy="55" r="3" fill="#3c4a59"/><circle cx="69" cy="55" r="3" fill="#3c4a59"/>
+  <path d="M53 65 q7 -6 14 0" stroke="#3c4a59" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+ <path class="drop" d="M46 86 q-3.5 6 0 8.5 q3.5 -2.5 0 -8.5" fill="#6fb7e8"/><path class="drop2" d="M60 88 q-3.5 6 0 8.5 q3.5 -2.5 0 -8.5" fill="#6fb7e8"/><path class="drop3" d="M74 86 q-3.5 6 0 8.5 q3.5 -2.5 0 -8.5" fill="#6fb7e8"/></g></svg>`;
+const CLOUD=`<svg viewBox="0 0 120 120">${DEFS}<g class="m-cloud">
+ <ellipse class="shadow" cx="60" cy="104" rx="28" ry="5.5" fill="#000" opacity=".22"/>
+ <g class="puff">${cloudBody("cc","ccb")}
+  <path d="M49 56 q5 4 10 0" stroke="#5d6b78" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M65 56 q5 4 10 0" stroke="#5d6b78" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M55 66 q5 3 10 0" stroke="#5d6b78" stroke-width="2.6" fill="none" stroke-linecap="round"/></g>
+ <text class="zz" x="84" y="40" font-family="Bricolage Grotesque,sans-serif" font-size="17" font-weight="800" fill="#fff">z</text></g></svg>`;
+const MOON=`<svg viewBox="0 0 120 120">${DEFS}<g class="m-moon">
+ <ellipse class="shadow" cx="60" cy="106" rx="26" ry="5.5" fill="#000" opacity=".25"/>
+ <g class="orb"><path d="M74 28 a34 34 0 1 0 16 60 a27 27 0 0 1 -16 -60Z" fill="url(#mn)"/>
+  <circle cx="64" cy="44" r="4" fill="#e0ad2e" opacity=".5"/><circle cx="58" cy="74" r="3" fill="#e0ad2e" opacity=".5"/><circle cx="74" cy="64" r="2.4" fill="#e0ad2e" opacity=".5"/>
+  <path d="M52 60 q5 4 10 0" stroke="#9a7b1e" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="70" cy="60" r="2.8" fill="#9a7b1e"/>
+  <path d="M54 72 q6 4 11 0" stroke="#9a7b1e" stroke-width="2.6" fill="none" stroke-linecap="round"/></g>
+ <path class="twk" d="M94 34 l2 5.4 5.4 2 -5.4 2 -2 5.4 -2 -5.4 -5.4 -2 5.4 -2Z" fill="#fff"/>
+ <text class="zz" x="86" y="34" font-family="Bricolage Grotesque,sans-serif" font-size="16" font-weight="800" fill="#fff">z</text></g></svg>`;
+const WINDY=`<svg viewBox="0 0 120 120">${DEFS}<g class="m-windy">
+ <ellipse class="shadow" cx="60" cy="104" rx="28" ry="5.5" fill="#000" opacity=".22"/>
+ <g class="puff">${cloudBody("cc","ccb")}
+  <path d="M50 54 q4 3 8 0" stroke="#5d6b78" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M64 54 q4 3 8 0" stroke="#5d6b78" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <ellipse cx="62" cy="64" rx="5" ry="4" fill="none" stroke="#5d6b78" stroke-width="2.6"/></g>
+ <g stroke="#eef3f8" stroke-width="4" stroke-linecap="round" fill="none" opacity=".9">
+  <path class="gust" d="M86 50 h22"/><path class="gust2" d="M88 60 h26"/><path class="gust3" d="M86 70 h20"/></g></g></svg>`;
+const THUNDER=`<svg viewBox="0 0 120 120">${DEFS}<g class="m-thunder">
+ <ellipse class="shadow" cx="60" cy="108" rx="28" ry="6" fill="#000" opacity=".3"/>
+ <g class="puff">${cloudBody("dk","clb")}
+  <path d="M46 44 l11 4" stroke="#222b36" stroke-width="3" stroke-linecap="round"/><path d="M74 48 l-11 4" stroke="#222b36" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="51" cy="55" r="3" fill="#222b36"/><circle cx="69" cy="55" r="3" fill="#222b36"/>
+  <path d="M53 65 q7 -6 14 0" stroke="#222b36" stroke-width="3" fill="none" stroke-linecap="round"/></g>
+ <path class="bolt" d="M62 70 l-12 18 h9 l-6 16 20 -22 h-9 l8 -10Z" fill="#ffd23f" stroke="#f5a700" stroke-width="1.4" stroke-linejoin="round"/></g></svg>`;
+const PARTLY=`<svg viewBox="0 0 120 120">${DEFS}<g class="m-partly">
+ <ellipse class="shadow" cx="62" cy="104" rx="26" ry="5.5" fill="#000" opacity=".22"/>
+ <g class="sun" fill="url(#ray)">${Array.from({length:8},(_,i)=>`<rect x="43.5" y="18" width="4.5" height="11" rx="2.2" transform="rotate(${i*45} 46 46)"/>`).join("")}</g>
+ <circle cx="46" cy="46" r="15" fill="url(#sun)"/><ellipse cx="41" cy="41" rx="5" ry="4" fill="#fff" opacity=".3"/>
+ <g class="puff">${cloudBody("cc","ccb").replace(/cx="(\d+)"/g,(m,x)=>`cx="${+x+8}"`).replace(/cy="(\d+)"/g,(m,y)=>`cy="${+y+10}"`)}
+  <path d="M58 66 q4 3 8 0" stroke="#5d6b78" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M72 66 q4 3 8 0" stroke="#5d6b78" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+  <path d="M64 75 q5 3 10 0" stroke="#5d6b78" stroke-width="2.4" fill="none" stroke-linecap="round"/></g></g></svg>`;
+
+function pick(c){
+ const rain=num(c?.rainfall?.rain_rate?.value)||0;
+ const gust=num(c?.wind?.wind_gust?.value)||0, wind=num(c?.wind?.wind_speed?.value)||0;
+ const solar=num(c?.solar_and_uvi?.solar?.value);const h=new Date().getHours();
+ const night=(solar!=null?solar<8:(h<6||h>19));
+ const strikes=c?.lightning?(num(c.lightning.lightning_num?.value)||num(c.lightning.count?.value)||0):0;
+ if(strikes>0)return{m:THUNDER,word:"Thunderstorm",scrim:["rgba(14,18,28,.56)","rgba(14,18,28,.8)"]};
+ if(rain>0.1)return{m:RAIN,word:"Raining",scrim:["rgba(20,28,38,.5)","rgba(20,28,38,.72)"]};
+ if(night)return{m:MOON,word:"Clear night",scrim:["rgba(6,10,20,.55)","rgba(6,10,20,.78)"]};
+ if(gust>=40||wind>=28)return{m:WINDY,word:"Windy",scrim:["rgba(16,24,34,.46)","rgba(16,24,34,.68)"]};
+ if(solar!=null&&solar<200)return{m:CLOUD,word:"Cloudy",scrim:["rgba(12,18,28,.42)","rgba(12,18,28,.64)"]};
+ if(solar!=null&&solar<450)return{m:PARTLY,word:"Partly cloudy",scrim:["rgba(18,20,24,.4)","rgba(16,16,18,.62)"]};
+ return{m:SUN,word:"Sunny",scrim:["rgba(28,20,8,.32)","rgba(20,16,10,.58)"]};
+}
+function card(k,v,unit,sub){return `<div class="card"><div class="k">${k}</div><div class="v">${v}${unit?`<small>${unit}</small>`:""}</div><div class="sub">${sub||""}</div></div>`}
+function area(svgId,vals,ts,color,baseZero){
+ const el=$(svgId);if(!vals.length){el.innerHTML="";return null}
+ const x0=Math.min(...ts),x1=Math.max(...ts);
+ let lo=Math.min(...vals),hi=Math.max(...vals);
+ if(baseZero){lo=0;hi=Math.max(hi,1)} // rain anchored at 0, min span so a flat-dry day still reads
+ const sx=v=>(x1===x0?0:(v-x0)/(x1-x0))*600, sy=v=>54-(hi===lo?.5:(v-lo)/(hi-lo))*48;
+ const pts=vals.map((v,i)=>`${sx(ts[i]).toFixed(1)},${sy(v).toFixed(1)}`).join(" ");
+ const gid=svgId+"g";
+ el.innerHTML=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".34"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs><polygon points="0,58 ${pts} 600,58" fill="url(#${gid})"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+ return{lo,hi};
+}
+
+function render(d){
+ const c=d.current||{};const p=pick(c);
+ document.documentElement.style.setProperty("--scrim-top",p.scrim[0]);
+ document.documentElement.style.setProperty("--scrim-bot",p.scrim[1]);
+ $("mascot").innerHTML=p.m;
+ $("place").textContent=d.station||"Weather station";$("updated").textContent=ago(d.updated);$("condition").textContent=p.word;
+ const t=c.outdoor?.temperature;$("temp").textContent=t?Math.round(num(t.value)):"--";
+ $("tempunit").textContent=(t?.unit||"°").replace("℃","°C").replace("℉","°F");
+ const fl=c.outdoor?.feels_like,dp=c.outdoor?.dew_point;
+ $("feels").innerHTML=[fl?`feels like ${Math.round(num(fl.value))}°`:null,dp?`dew point ${Math.round(num(dp.value))}°`:null].filter(Boolean).join("<br>");
+ const cards=[];const w=c.wind;
+ if(w?.wind_speed){const dir=num(w.wind_direction?.value);
+  const arrow=dir!=null?`<span class="compass"><svg width="15" height="15" viewBox="0 0 24 24" style="transform:rotate(${dir+180}deg)"><path d="M12 2 L17 20 L12 16 L7 20 Z" fill="currentColor"/></svg>${dirName(dir)}</span>`:"";
+  cards.push(card("Wind",Math.round(num(w.wind_speed.value)),w.wind_speed.unit,[w.wind_gust?`gust ${Math.round(num(w.wind_gust.value))}`:null,arrow].filter(Boolean).join("  ")));}
+ if(c.rainfall?.daily)cards.push(card("Rain today",num(c.rainfall.daily.value).toFixed(1),c.rainfall.daily.unit,c.rainfall.rain_rate?`now ${num(c.rainfall.rain_rate.value).toFixed(1)} ${c.rainfall.rain_rate.unit}`:""));
+ if(c.outdoor?.humidity)cards.push(card("Humidity",Math.round(num(c.outdoor.humidity.value)),"%",""));
+ if(c.pressure?.relative)cards.push(card("Pressure",Math.round(num(c.pressure.relative.value)),c.pressure.relative.unit,""));
+ if(c.solar_and_uvi?.uvi){const[lab,col]=uv(c.solar_and_uvi.uvi.value);cards.push(card("UV index",num(c.solar_and_uvi.uvi.value),"",`<span class="uvpill" style="background:${col}">${lab}</span>`));}
+ if(c.solar_and_uvi?.solar)cards.push(card("Solar",Math.round(num(c.solar_and_uvi.solar.value)),c.solar_and_uvi.solar.unit,""));
+ $("grid").innerHTML=cards.join("");
+ [...document.querySelectorAll(".card")].forEach((el,i)=>el.style.animationDelay=(.12+i*.06)+"s");
+ // charts
+ const hist=(d.history||[]).filter(x=>x&&x.temp!=null);
+ if(hist.length>3){
+  const ts=hist.map(x=>x.t);
+  const r1=area("spark",hist.map(x=>+x.temp),ts,"#fff",false);
+  if(r1){$("trendrange").textContent=`${Math.round(r1.lo)}° – ${Math.round(r1.hi)}°`;$("trendbox").style.display="";}
+  const rains=hist.map(x=>x.rain!=null?+x.rain:0);
+  const r2=area("sparkrain",rains,ts,"#6fb7e8",true);
+  if(r2){const peak=Math.max(...rains);$("rainrange").textContent=peak>0?`peak ${peak.toFixed(1)} mm/hr`:"dry";$("rainbox").style.display="";}
+ }
+ $("foot").innerHTML="Have a great day!";
+}
+
+/* ============ FORECAST ============ */
+function wIcon(code){
+ const C={
+  sun:'<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="9" fill="#ffd23f"/><g stroke="#ffd23f" stroke-width="2.4" stroke-linecap="round">'+Array.from({length:8},(_,i)=>{const a=i*45*Math.PI/180;return `<line x1="${(20+12*Math.cos(a)).toFixed(1)}" y1="${(20+12*Math.sin(a)).toFixed(1)}" x2="${(20+16*Math.cos(a)).toFixed(1)}" y2="${(20+16*Math.sin(a)).toFixed(1)}"/>`}).join("")+'</g></svg>',
+  part:'<svg viewBox="0 0 40 40"><circle cx="15" cy="15" r="7" fill="#ffd23f"/><ellipse cx="24" cy="25" rx="13" ry="9" fill="#e8eef4"/><ellipse cx="15" cy="27" rx="9" ry="7" fill="#e8eef4"/></svg>',
+  cloud:'<svg viewBox="0 0 40 40"><ellipse cx="20" cy="22" rx="14" ry="10" fill="#dde6ee"/><ellipse cx="13" cy="25" rx="8" ry="6" fill="#cdd8e2"/><ellipse cx="27" cy="25" rx="8" ry="6" fill="#cdd8e2"/></svg>',
+  rain:'<svg viewBox="0 0 40 40"><ellipse cx="20" cy="17" rx="13" ry="9" fill="#aeb9c6"/><g stroke="#6fb7e8" stroke-width="2.6" stroke-linecap="round"><line x1="14" y1="28" x2="12" y2="33"/><line x1="21" y1="28" x2="19" y2="34"/><line x1="28" y1="28" x2="26" y2="33"/></g></svg>',
+  storm:'<svg viewBox="0 0 40 40"><ellipse cx="20" cy="16" rx="13" ry="9" fill="#8a97a5"/><path d="M20 24 l-5 8 h4 l-3 7 9 -11 h-4 l3 -4Z" fill="#ffd23f"/></svg>',
+  fog:'<svg viewBox="0 0 40 40"><ellipse cx="20" cy="15" rx="13" ry="8" fill="#cdd8e2"/><g stroke="#cdd8e2" stroke-width="2.6" stroke-linecap="round"><line x1="10" y1="27" x2="30" y2="27"/><line x1="13" y1="32" x2="27" y2="32"/></g></svg>'};
+ if(code===0)return[C.sun,"Clear"];if(code<=2)return[C.part,"Partly cloudy"];if(code===3)return[C.cloud,"Overcast"];
+ if(code===45||code===48)return[C.fog,"Fog"];if(code>=95)return[C.storm,"Thunderstorm"];
+ if(code>=80)return[C.rain,"Showers"];if(code>=51)return[C.rain,"Rain"];return[C.cloud,"Cloudy"];
+}
+function renderForecast(dy){
+ if(!dy||!dy.time)return;
+ $("fctitle").textContent="Forecast · "+FC_NAME;
+ $("fcrow").innerHTML=dy.time.map((iso,i)=>{
+  const dt=new Date(iso+"T00:00");
+  const lbl=i===0?"Today":dt.toLocaleDateString("en-AU",{weekday:"short"});
+  const[ic,label]=wIcon(dy.weather_code[i]);
+  const hi=Math.round(dy.temperature_2m_max[i]),lo=Math.round(dy.temperature_2m_min[i]);
+  const pp=dy.precipitation_probability_max?dy.precipitation_probability_max[i]:null;
+  return `<div class="fc-pill"><span class="d">${lbl}</span><span class="ic">${ic}</span><span class="lab">${label}</span><span class="pp">${pp!=null&&pp>=10?pp+"%":""}</span><span class="hl">${hi}°<span class="lo"> ${lo}°</span></span></div>`;
+ }).join("");
+ $("fcbox").style.display="";
+}
+async function loadForecast(){
+ const u=`https://api.open-meteo.com/v1/forecast?latitude=${FC_LAT}&longitude=${FC_LON}`+
+  `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=6`+
+  (FC_MODEL?`&models=${FC_MODEL}`:"");
+ try{const r=await fetch(u);if(!r.ok)throw 0;const j=await r.json();renderForecast(j.daily);}catch(e){renderForecast(SAMPLE_FC);}
+}
+
+/* ============ load + refresh ============ */
+async function load(){try{const r=await fetch("./data.json?_="+Date.now(),{cache:"no-store"});if(!r.ok)throw 0;render(await r.json());}catch(e){render(SAMPLE);}}
+load();loadForecast();
+setInterval(load,60000);
+setInterval(loadForecast,30*60000);
+</script>
+</body></html>
