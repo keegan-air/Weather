@@ -132,6 +132,23 @@ footer{margin-top:auto;padding-top:24px;font-family:"Space Mono",monospace;font-
  .mascot svg{animation:none}
  .m-rain .drop,.m-rain .drop2,.m-rain .drop3,.m-cloud .zz,.m-moon .zz,.m-windy .gust,.m-windy .gust2,.m-windy .gust3,.m-thunder .bolt{opacity:1}
 }
+
+/* ===== DESKTOP HUB (wide screens only; mobile layout untouched) ===== */
+@media (min-width:1000px){
+ .wrap{max-width:1180px;min-height:100dvh;display:grid;align-content:start;
+  grid-template-columns:1.05fr 1fr;gap:16px 24px;
+  grid-template-areas:"eye eye" "hero fc" "cards fc" "temp rain" "fact fact" "foot foot";
+  padding:34px clamp(24px,4vw,48px) 40px}
+ .eyebrow{grid-area:eye;margin:0 0 2px}
+ .hero{grid-area:hero;margin:0;align-self:start}
+ .grid{grid-area:cards;margin:0;grid-template-columns:repeat(3,1fr)}
+ .fc{grid-area:fc;margin:0;align-self:stretch;display:flex;flex-direction:column}
+ .fc-list{flex:1;justify-content:space-between}
+ #trendbox{grid-area:temp;margin:0}
+ #rainbox{grid-area:rain;margin:0}
+ .fact{grid-area:fact;margin:0}
+ footer{grid-area:foot;margin:0;text-align:center;padding-top:6px}
+}
 </style>
 </head>
 <body>
